@@ -1,3 +1,4 @@
+import base64
 import requests
 from flask import Flask, request, jsonify
 from io import BytesIO
@@ -8,20 +9,20 @@ app = Flask(__name__)
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    if 'image_url' not in request.json:
-        return jsonify({'error': 'image_url não fornecido'}), 400
+    data = request.json
 
-    image_url = request.json['image_url']
+    if 'image_url' in data:
+        image = download_image(data['image_url'])
+    elif 'image_base64' in data:
+        image = decode_base64_image(data['image_base64'])
+    else:
+        return jsonify({'error': 'Nenhuma imagem fornecida (image_url ou image_base64)'}), 400
 
-    # Tenta baixar e processar a imagem da URL
-    image = download_image(image_url)
     if image is None:
-        return jsonify({'error': 'Não foi possível baixar a imagem'}), 400
+        return jsonify({'error': 'Não foi possível carregar a imagem'}), 400
 
-    # Converte a imagem para um array NumPy (OpenCV usa esse formato)
     image = np.array(image)
 
-    # Lógica de predição
     try:
         result = predict_image(image)
         return jsonify(result)
@@ -32,27 +33,36 @@ def predict():
 def download_image(image_url):
     try:
         response = requests.get(image_url, timeout=10)
-        response.raise_for_status()  # Levanta um erro se a resposta for 4xx ou 5xx
+        response.raise_for_status()
         img = Image.open(BytesIO(response.content))
         return img
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         print(f"Erro ao baixar a imagem: {e}")
         return None
 
-def predict_image(image):
-    """Função para fazer a predição da imagem."""
-    if image is None:
-        raise ValueError(f"Imagem não válida fornecida!")
+def decode_base64_image(b64_string):
+    try:
+        image_data = base64.b64decode(b64_string)
+        img = Image.open(BytesIO(image_data))
+        return img
+    except Exception as e:
+        print(f"Erro ao decodificar imagem base64: {e}")
+        return None
 
-    height, width, _ = image.shape
+def predict_image(image):
+    if image is None:
+        raise ValueError("Imagem inválida")
+
+    height, width = image.shape[:2]
     if width / height != 3 / 4:
         print("Imagem não está no formato 3:4. Continuando mesmo assim...")
 
-    # Chame o modelo para fazer a predição (você já tem a lógica aqui)
-    # Substitua a linha abaixo pelo seu código de predição real
-    result = {"label": "real", "score": 0.95, "prediction_time": 0.5, "bbox": [0, 0, width, height]}
-
-    return result
+    return {
+        "label": "real",
+        "score": 0.95,
+        "prediction_time": 0.5,
+        "bbox": [0, 0, width, height]
+    }
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001)
