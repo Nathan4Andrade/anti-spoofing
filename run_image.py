@@ -1,9 +1,10 @@
-# run_image.py
-
 import os
 import time
 import cv2
 import numpy as np
+import base64
+from io import BytesIO
+from PIL import Image
 from src.anti_spoof_predict import AntiSpoofPredict
 from src.generate_patches import CropImage
 from src.utility import parse_model_name
@@ -15,11 +16,19 @@ image_cropper = CropImage()
 # Default, mas você pode mudar depois
 model_dir = "./resources/anti_spoof_models"
 
+def decode_base64_image(base64_string):
+    """Função para decodificar uma imagem em base64 e convertê-la para um formato OpenCV (numpy array)."""
+    img_data = base64.b64decode(base64_string)
+    img = Image.open(BytesIO(img_data))
+    img = np.array(img)
+    # Converte de RGB para BGR (formato usado pelo OpenCV)
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    return img
 
-def predict_image(image_path):
-    image = cv2.imread(image_path)
+def predict_image(image):
+    """Função para fazer a predição da imagem."""
     if image is None:
-        raise ValueError(f"Imagem não encontrada: {image_path}")
+        raise ValueError(f"Imagem não válida fornecida!")
 
     height, width, _ = image.shape
     if width / height != 3 / 4:
@@ -63,8 +72,8 @@ def predict_image(image_path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Run Silent-Face-Anti-Spoofing on a single image.")
-    parser.add_argument("--image_path", type=str, required=True,
-                        help="Caminho da imagem para testar")
+    parser.add_argument("--image_base64", type=str, required=True,
+                        help="Imagem em formato base64 para testar")
     parser.add_argument("--model_dir", type=str,
                         default="./resources/anti_spoof_models", help="Pasta dos modelos treinados")
     parser.add_argument("--device_id", type=int, default=0,
@@ -75,9 +84,11 @@ if __name__ == "__main__":
     # Atualiza se vier argumento
     model_dir = args.model_dir
 
+    # Decodifica a imagem base64 recebida
     print("🔎 Analisando imagem...")
 
-    result = predict_image(args.image_path)
+    image = decode_base64_image(args.image_base64)
+    result = predict_image(image)
 
     print("\n🎯 Resultado:")
     print(f"Label: {result['label']}")
